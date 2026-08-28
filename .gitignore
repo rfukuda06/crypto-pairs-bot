@@ -1,0 +1,13 @@
+data_cache/
+bot.db
+reports/
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Local-only design/workflow docs (not published)
+docs/superpowers/

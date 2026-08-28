@@ -1,0 +1,26 @@
+universe: [ETH, SOL, AVAX, ADA, DOT, NEAR, BTC, LTC, XRP, LINK, XLM]
+exchange: bitstamp
+quote: USD
+timeframe: 1h
+data:
+  start: "2024-01-01"
+  cache_dir: ./data_cache
+research:
+  train_window_days: 540
+  p_threshold: 0.05
+strategy:
+  z_window: 168
+  entry_z: 2.0
+  exit_z: 0.5
+  stop_z: 3.5
+  max_holding_bars: 168
+risk:
+  gross_exposure_pct: 0.50
+  max_drawdown_pct: 0.20
+costs:
+  fee_pct: 0.001
+  slippage_pct: 0.0005
+account:
+  starting_equity: 10000
+storage:
+  db_path: ./bot.db
