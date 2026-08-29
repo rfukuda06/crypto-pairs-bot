@@ -1,5 +1,6 @@
 data_cache/
 bot.db
+selection.json
 reports/
 __pycache__/
 *.pyc
