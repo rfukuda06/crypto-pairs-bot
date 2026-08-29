@@ -20,6 +20,7 @@ class DataCfg:
 class ResearchCfg:
     train_window_days: int
     p_threshold: float
+    selection_path: str = "./selection.json"
 
 
 @dataclass
