@@ -1,5 +1,7 @@
 # Crypto Pairs-Trading Bot
 
+[![CI](https://github.com/rfukuda06/crypto-pairs-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/rfukuda06/crypto-pairs-bot/actions/workflows/ci.yml)
+
 **A statistical-arbitrage bot engineered to show its own strategy losing — honestly.** The same Strategy + Risk + PaperBroker core drives both the no-lookahead backtest and the live paper feed, so the numbers you see out-of-sample are the numbers live would trade.
 
 ```
@@ -12,6 +14,12 @@
 ```
 
 Python 3.13 · Typer CLI (`pairsbot`) · paper-only by design. This is a portfolio/engineering project: **returns are not a priority.** The value is structural correctness and honesty — and that one codebase trades the backtest and the live feed identically.
+
+## Watch it run
+
+![pairsbot demo — screen, optimize, status](docs/img/demo.svg)
+
+*A real `pairsbot` session (numbers verbatim from the run): `screen` freezes the pair, `optimize` shows the in-sample-vs-out-of-sample gap, `status` reads the live paper book.*
 
 ---
 
