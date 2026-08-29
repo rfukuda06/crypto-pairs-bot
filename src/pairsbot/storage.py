@@ -10,11 +10,13 @@ CREATE TABLE IF NOT EXISTS runs (
     pair TEXT
 );
 CREATE TABLE IF NOT EXISTS equity (
-    run_id INTEGER, ts TEXT, equity REAL
+    run_id INTEGER, ts TEXT, equity REAL,
+    UNIQUE(run_id, ts)
 );
 CREATE TABLE IF NOT EXISTS trades (
     run_id INTEGER, ts TEXT, symbol TEXT, notional REAL,
-    price REAL, qty REAL, fee REAL, reason TEXT
+    price REAL, qty REAL, fee REAL, reason TEXT,
+    UNIQUE(run_id, ts, symbol)
 );
 CREATE TABLE IF NOT EXISTS positions (
     run_id INTEGER, symbol TEXT, qty REAL, avg_price REAL,
@@ -37,13 +39,16 @@ class Store:
 
     def record_equity(self, run_id: int, ts: str, equity: float) -> None:
         self._conn.execute(
-            "INSERT INTO equity VALUES (?, ?, ?)", (run_id, ts, equity))
+            "INSERT OR REPLACE INTO equity (run_id, ts, equity) VALUES (?, ?, ?)",
+            (run_id, ts, equity))
         self._conn.commit()
 
     def record_trade(self, run_id: int, ts: str, symbol: str, notional: float,
                      price: float, qty: float, fee: float, reason: str) -> None:
         self._conn.execute(
-            "INSERT INTO trades VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO trades "
+            "(run_id, ts, symbol, notional, price, qty, fee, reason) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (run_id, ts, symbol, notional, price, qty, fee, reason))
         self._conn.commit()
 
@@ -77,6 +82,13 @@ class Store:
             row = self._conn.execute(
                 "SELECT id, mode, pair FROM runs WHERE id=?", (run_id,)).fetchone()
         return (int(row[0]), row[1], row[2]) if row else None
+
+    def latest_live_run(self, pair: str) -> int | None:
+        """Most recent live run for a pair, or None. Used to resume on restart."""
+        row = self._conn.execute(
+            "SELECT id FROM runs WHERE mode='live' AND pair=? ORDER BY id DESC LIMIT 1",
+            (pair,)).fetchone()
+        return int(row[0]) if row else None
 
     def load_positions(self, run_id: int) -> dict[str, tuple[float, float]]:
         rows = self._conn.execute(
