@@ -121,6 +121,32 @@ def test_no_double_entry_when_broker_already_holds(tmp_path):
     assert broker.positions()["A"].qty == pytest.approx(1.0)
 
 
+def test_run_loop_survives_a_feed_error(tmp_path):
+    idx = pd.date_range("2024-01-01", periods=3, freq="1h", tz="UTC")
+
+    class OneErrorFeed:
+        def __init__(self):
+            self.calls = 0
+        def latest_closed_bar(self, symbols):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("boom")
+            i = self.calls - 2
+            return {"A": {"ts": idx[i], "open": 100.0 + i, "close": 100.0 + i},
+                    "B": {"ts": idx[i], "open": 50.0, "close": 50.0}}
+
+    store = Store(str(tmp_path / "live.db"))
+    sel = PairSelection(a="A", b="B", beta=1.0, pvalue=0.001)
+    cfg = dict(z_window=2, entry_z=2.0, exit_z=0.5, stop_z=3.5, max_holding_bars=168)
+    runner = LiveRunner(feed=OneErrorFeed(), broker=PaperBroker(10000, 0.001, 0.0005),
+                        strategy=PairsStrategy(),
+                        risk=RiskManager(gross_exposure_pct=0.5, max_drawdown_pct=0.2),
+                        store=store, selection=sel, symbols=["A", "B"],
+                        strategy_cfg=cfg, sleep=lambda s: None)
+    runner.run(max_iterations=3)                   # 1st poll errors, loop must continue
+    assert len(store.load_equity(runner.run_id)) >= 1
+
+
 def test_live_runner_recovers_positions_on_restart(tmp_path):
     db = str(tmp_path / "live.db")
     store = Store(db)

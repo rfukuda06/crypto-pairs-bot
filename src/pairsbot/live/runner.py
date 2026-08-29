@@ -1,10 +1,14 @@
 # src/pairsbot/live/runner.py
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
 
 from pairsbot.core.types import Position, SpreadSide, StrategyContext
 from pairsbot.monitor import build_live_snapshot, format_live_line
+
+log = logging.getLogger(__name__)
 
 
 class LiveRunner:
@@ -125,7 +129,10 @@ class LiveRunner:
     def run(self, max_iterations: int | None = None) -> None:
         n = 0
         while max_iterations is None or n < max_iterations:
-            self._step()
+            try:
+                self._step()
+            except Exception as e:  # never let one bad poll kill the live loop
+                log.warning("live step failed (%s); continuing", e)
             n += 1
             if max_iterations is None or n < max_iterations:
                 self.sleep(self.poll_seconds)
