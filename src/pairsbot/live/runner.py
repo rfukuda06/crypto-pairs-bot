@@ -10,7 +10,8 @@ from pairsbot.monitor import build_live_snapshot, format_live_line
 class LiveRunner:
     def __init__(self, feed, broker, strategy, risk, store, selection, symbols,
                  strategy_cfg: dict, sleep, poll_seconds: int = 3600,
-                 starting_equity: float | None = None):
+                 starting_equity: float | None = None, initial_closes=None,
+                 run_id: int | None = None):
         self.feed = feed
         self.broker = broker
         self.strategy = strategy
@@ -22,8 +23,12 @@ class LiveRunner:
         self.sleep = sleep
         self.poll_seconds = poll_seconds
         self._starting_equity = broker.equity() if starting_equity is None else starting_equity
-        self.run_id = store.start_run(mode="live", pair=f"{selection.a}/{selection.b}")
-        self._closes = pd.DataFrame(columns=[selection.a, selection.b], dtype=float)
+        self.run_id = run_id if run_id is not None else store.start_run(
+            mode="live", pair=f"{selection.a}/{selection.b}")
+        if initial_closes is not None and len(initial_closes):
+            self._closes = initial_closes[[selection.a, selection.b]].astype(float).copy()
+        else:
+            self._closes = pd.DataFrame(columns=[selection.a, selection.b], dtype=float)
         self._pending: list = []
         self.in_position = False
         self.side = None

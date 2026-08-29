@@ -49,6 +49,24 @@ def test_live_runner_processes_bars_and_persists(tmp_path):
     assert len(store.load_trades(runner.run_id)) > 0
 
 
+def test_backfill_lets_runner_trade_on_first_bars(tmp_path):
+    a, b, idx = _series(n=300)
+    # seed with the first 200 bars; feed replays the remaining 100
+    seed = pd.DataFrame({"A": a[:200], "B": b[:200]}, index=idx[:200])
+    feed = FakeFeed(a[200:], b[200:], idx[200:])
+    store = Store(str(tmp_path / "live.db"))
+    sel = PairSelection(a="A", b="B", beta=1.0, pvalue=0.001)
+    cfg = dict(z_window=100, entry_z=2.0, exit_z=0.5, stop_z=3.5, max_holding_bars=168)
+    runner = LiveRunner(feed=feed, broker=PaperBroker(10000, 0.001, 0.0005),
+                        strategy=PairsStrategy(),
+                        risk=RiskManager(gross_exposure_pct=0.5, max_drawdown_pct=0.2),
+                        store=store, selection=sel, symbols=["A", "B"],
+                        strategy_cfg=cfg, sleep=lambda s: None,
+                        initial_closes=seed)
+    runner.run(max_iterations=5)          # only 5 live bars, but window is pre-filled
+    assert len(runner._closes) >= 100      # window already deep enough to compute z
+
+
 def test_live_runner_recovers_positions_on_restart(tmp_path):
     db = str(tmp_path / "live.db")
     store = Store(db)

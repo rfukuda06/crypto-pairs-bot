@@ -166,10 +166,12 @@ def live_cmd(config: str = "config.yaml"):
     store = Store(cfg.storage.db_path)
     broker = PaperBroker(cfg.account.starting_equity, cfg.costs.fee_pct,
                          cfg.costs.slippage_pct)
-    runner = LiveRunner(LiveFeed(cfg.quote, cfg.timeframe, exchange_name=cfg.exchange), broker, PairsStrategy(),
+    seed = align_closes(loader.load([sel.a, sel.b], cfg.data.start)).tail(cfg.strategy.z_window)
+    runner = LiveRunner(LiveFeed(cfg.quote, cfg.timeframe, exchange_name=cfg.exchange), broker,
+                        PairsStrategy(),
                         RiskManager(cfg.risk.gross_exposure_pct, cfg.risk.max_drawdown_pct),
                         store, sel, [sel.a, sel.b], _strategy_cfg(cfg), time.sleep,
-                        starting_equity=cfg.account.starting_equity)
+                        starting_equity=cfg.account.starting_equity, initial_closes=seed)
     typer.echo(f"Live paper trading {sel.a}/{sel.b}. Ctrl-C to stop.")
     runner.run()
 
