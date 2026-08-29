@@ -12,6 +12,15 @@ log = logging.getLogger(__name__)
 
 _TF_SECONDS = {"1h": 3600, "1d": 86400}
 
+# A held leg whose notional is below this fraction of equity is slippage "dust"
+# left by a flatten (positions don't close to exactly zero), not a real position.
+_DUST_FRACTION = 1e-3
+
+
+def _is_material(qty: float, price: float, equity: float) -> bool:
+    """True if a held leg is a real position rather than post-flatten dust."""
+    return abs(qty) * price > _DUST_FRACTION * max(equity, 0.0)
+
 
 class LiveRunner:
     def __init__(self, feed, broker, strategy, risk, store, selection, symbols,
@@ -69,14 +78,15 @@ class LiveRunner:
         trade (the open entry)."""
         a = self.sel.a
         held = self.broker.positions()
-        if a not in held or held[a].qty == 0:
-            return
+        eq = self.store.load_equity(self.run_id)
+        last_equity = eq[-1][1] if eq else self._starting_equity
+        if a not in held or not _is_material(held[a].qty, held[a].avg_price, last_equity):
+            return                                   # flat, or only post-flatten dust
         self.in_position = True
         self.side = SpreadSide.LONG if held[a].qty > 0 else SpreadSide.SHORT
         trades = self.store.load_trades(self.run_id)
         if trades:
             entry_ts = trades[-1]["ts"]              # while in_position, last trade is the entry
-            eq = self.store.load_equity(self.run_id)
             self.bars_in = sum(1 for ts, _ in eq if ts > entry_ts)
 
     def _step(self) -> None:
@@ -127,8 +137,10 @@ class LiveRunner:
                 self.in_position, self.side, self.bars_in = False, None, 0
             elif sig.kind == "enter" and not self.in_position:
                 held = self.broker.positions()
-                if a in held or b in held:
-                    continue                     # safety: never stack a 2nd position
+                closes = {a: float(bar[a]["close"]), b: float(bar[b]["close"])}
+                if any(sym in held and _is_material(held[sym].qty, closes[sym], equity)
+                       for sym in (a, b)):
+                    continue                     # safety: never stack a 2nd real position
                 if self.risk.allow_entry(equity):
                     self._pending = self.risk.entry_orders(sig, equity, a, b)
                     self.in_position, self.side, self.bars_in = True, sig.spread_side, 0

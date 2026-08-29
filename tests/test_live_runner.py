@@ -175,6 +175,27 @@ def test_live_runner_recovers_positions_on_restart(tmp_path):
     assert pos["A"].qty == 2.0 and pos["B"].qty == -2.0
 
 
+def test_restart_ignores_dust_positions(tmp_path):
+    store = Store(str(tmp_path / "live.db"))
+    sel = PairSelection(a="A", b="B", beta=1.0, pvalue=0.001)
+    run_id = store.start_run(mode="live", pair="A/B")
+    # dust left by a prior flatten: tiny notional relative to equity
+    store.upsert_position(run_id, "A", qty=0.001, avg_price=250.0)   # ~$0.25
+    store.upsert_position(run_id, "B", qty=-0.002, avg_price=125.0)  # ~$0.25
+    store.record_equity(run_id, "t0", 10000.0)
+    broker = PaperBroker(10000, 0.001, 0.0005)
+    LiveRunner.restore_broker(broker, store, run_id)
+    seed = pd.DataFrame({"A": [250.0] * 10, "B": [125.0] * 10},
+                        index=pd.date_range("2024-01-01", periods=10, freq="1h", tz="UTC"))
+    cfg = dict(z_window=5, entry_z=2.0, exit_z=0.5, stop_z=3.5, max_holding_bars=168)
+    runner = LiveRunner(feed=object(), broker=broker, strategy=PairsStrategy(),
+                        risk=RiskManager(gross_exposure_pct=0.5, max_drawdown_pct=0.2),
+                        store=store, selection=sel, symbols=["A", "B"],
+                        strategy_cfg=cfg, sleep=lambda s: None,
+                        initial_closes=seed, run_id=run_id)
+    assert runner.in_position is False                 # dust is not a real position
+
+
 def test_restart_keeps_equity_continuous(tmp_path):
     store = Store(str(tmp_path / "live.db"))
     run_id = store.start_run(mode="live", pair="A/B")
