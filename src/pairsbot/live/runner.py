@@ -10,6 +10,8 @@ from pairsbot.monitor import build_live_snapshot, format_live_line
 
 log = logging.getLogger(__name__)
 
+_TF_SECONDS = {"1h": 3600, "1d": 86400}
+
 
 class LiveRunner:
     def __init__(self, feed, broker, strategy, risk, store, selection, symbols,
@@ -26,6 +28,11 @@ class LiveRunner:
         self.cfg = strategy_cfg
         self.sleep = sleep
         self.poll_seconds = poll_seconds
+        tf = getattr(feed, "timeframe", None)
+        if tf in _TF_SECONDS and poll_seconds > _TF_SECONDS[tf]:
+            raise ValueError(
+                f"poll_seconds ({poll_seconds}) exceeds the {tf} bar interval "
+                f"({_TF_SECONDS[tf]}s); bars would be skipped")
         self._starting_equity = broker.equity() if starting_equity is None else starting_equity
         self.run_id = run_id if run_id is not None else store.start_run(
             mode="live", pair=f"{selection.a}/{selection.b}")

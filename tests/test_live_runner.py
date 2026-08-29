@@ -147,6 +147,22 @@ def test_run_loop_survives_a_feed_error(tmp_path):
     assert len(store.load_equity(runner.run_id)) >= 1
 
 
+def test_poll_seconds_longer_than_timeframe_is_rejected(tmp_path):
+    class TfFeed:
+        timeframe = "1h"
+        def latest_closed_bar(self, symbols):  # pragma: no cover - not reached
+            return {}
+    store = Store(str(tmp_path / "live.db"))
+    sel = PairSelection(a="A", b="B", beta=1.0, pvalue=0.001)
+    cfg = dict(z_window=5, entry_z=2.0, exit_z=0.5, stop_z=3.5, max_holding_bars=168)
+    with pytest.raises(ValueError):
+        LiveRunner(feed=TfFeed(), broker=PaperBroker(10000, 0.001, 0.0005),
+                   strategy=PairsStrategy(),
+                   risk=RiskManager(gross_exposure_pct=0.5, max_drawdown_pct=0.2),
+                   store=store, selection=sel, symbols=["A", "B"],
+                   strategy_cfg=cfg, sleep=lambda s: None, poll_seconds=7200)
+
+
 def test_live_runner_recovers_positions_on_restart(tmp_path):
     db = str(tmp_path / "live.db")
     store = Store(db)
