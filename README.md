@@ -32,11 +32,18 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 pytest                    # all tests green
 pairsbot fetch-data       # cache historical OHLCV
-pairsbot screen           # show the cointegrated pair
+pairsbot screen           # screen in-sample & FREEZE the pair to selection.json
 pairsbot backtest         # writes reports/report.md + charts
 pairsbot optimize         # tune params in-sample, evaluate out-of-sample
-pairsbot live             # live paper trading (Ctrl-C to stop)
+pairsbot live             # live paper trading; resumes prior run (Ctrl-C to stop)
 ```
+
+The pair is chosen **once** on the in-sample window and frozen to
+`research.selection_path` (`selection.json`); `backtest`, `optimize`, and `live` all
+load that same frozen pair, so the backtest validates exactly what live trades. On
+startup `live` seeds its z-score window from the cache (so it can trade immediately)
+and, if a prior live run for the pair exists, resumes it — restoring open positions,
+cash, and strategy state so the equity curve stays continuous across restarts.
 
 ## How the strategy works
 

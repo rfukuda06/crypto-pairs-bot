@@ -8,6 +8,7 @@ data:
 research:
   train_window_days: 540
   p_threshold: 0.05
+  selection_path: ./selection.json
 strategy:
   z_window: 168
   entry_z: 2.0
