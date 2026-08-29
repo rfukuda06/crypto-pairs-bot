@@ -115,6 +115,9 @@ class LiveRunner:
                 self._pending = self.risk.flatten_orders(self.broker.positions(), prices)
                 self.in_position, self.side, self.bars_in = False, None, 0
             elif sig.kind == "enter" and not self.in_position:
+                held = self.broker.positions()
+                if a in held or b in held:
+                    continue                     # safety: never stack a 2nd position
                 if self.risk.allow_entry(equity):
                     self._pending = self.risk.entry_orders(sig, equity, a, b)
                     self.in_position, self.side, self.bars_in = True, sig.spread_side, 0

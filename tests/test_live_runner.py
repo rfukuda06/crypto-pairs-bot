@@ -1,7 +1,7 @@
 # tests/test_live_runner.py
 import pandas as pd
 import pytest
-from pairsbot.core.types import PairSelection, SpreadSide
+from pairsbot.core.types import PairSelection, Position, SpreadSide
 from pairsbot.strategy.pairs import PairsStrategy
 from pairsbot.risk.manager import RiskManager
 from pairsbot.execution.broker import PaperBroker
@@ -97,6 +97,28 @@ def test_duplicate_bar_is_skipped(tmp_path):
     runner.run(max_iterations=5)
     assert strat.calls == 1                          # duplicate bars skipped, not re-processed
     assert len(runner._closes) == 1                  # only the first bar recorded
+
+
+def test_no_double_entry_when_broker_already_holds(tmp_path):
+    # Six bars; a spread spike drives an entry signal on the later bars.
+    idx = pd.date_range("2024-01-01", periods=6, freq="1h", tz="UTC")
+    a = [100.0, 100.0, 100.0, 100.0, 140.0, 140.0]
+    b = [100.0, 100.0, 100.0, 100.0, 100.0, 100.0]
+    feed = FakeFeed(a, b, idx)
+    store = Store(str(tmp_path / "live.db"))
+    sel = PairSelection(a="A", b="B", beta=1.0, pvalue=0.001)
+    cfg = dict(z_window=3, entry_z=0.5, exit_z=0.1, stop_z=9.0, max_holding_bars=999)
+    broker = PaperBroker(10000, 0.001, 0.0005)
+    # a pre-existing position the fresh runner is unaware of (in_position stays False)
+    broker._pos["A"] = Position("A", qty=1.0, avg_price=100.0)
+    broker._pos["B"] = Position("B", qty=-1.0, avg_price=100.0)
+    runner = LiveRunner(feed=feed, broker=broker, strategy=PairsStrategy(),
+                        risk=RiskManager(gross_exposure_pct=0.5, max_drawdown_pct=0.2),
+                        store=store, selection=sel, symbols=["A", "B"],
+                        strategy_cfg=cfg, sleep=lambda s: None)
+    runner.run(max_iterations=6)
+    # guard must prevent stacking a second position on the existing one
+    assert broker.positions()["A"].qty == pytest.approx(1.0)
 
 
 def test_live_runner_recovers_positions_on_restart(tmp_path):
