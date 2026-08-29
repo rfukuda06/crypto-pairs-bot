@@ -26,7 +26,7 @@ On real Bitstamp hourly data (11 majors, from 2024-01-01), the screen freezes **
 | default           | —                        | −17.76% return, Sharpe −2.15, 268 fills |
 | tuned in-sample   | +61.89% return, Sharpe 1.68 | −16.37% return, Sharpe −1.39, 68 fills |
 
-![Equity curve: $10k bleeding to ~$8.2k then flat](reports/equity.png)
+![Equity curve: $10k bleeding to ~$8.2k then flat](docs/img/equity.png)
 
 The default backtest ends at **$8,223.62** from a $10,000 start (max drawdown −20.97%, 268 fills).
 
@@ -74,7 +74,7 @@ If any decision peeked at the future, this assertion would fail.
 
 Costs and limits: `gross_exposure_pct = 0.50`, `max_drawdown_pct = 0.20` (kill-switch), `fee_pct = 0.001`, `slippage_pct = 0.0005`, `starting_equity = $10,000`.
 
-![Log spread LTC−XLM with rolling z-score and ±2 bands](reports/spread_zscore.png)
+![Log spread LTC−XLM with rolling z-score and ±2 bands](docs/img/spread_zscore.png)
 
 **The shared core.** One `PairsStrategy` + `RiskManager` + `PaperBroker` drives **both** paths identically. The contract is `StrategyContext → list[Signal] → Orders → Fills`. Backtest feeds a historical DataFrame; live feeds an hourly `ccxt` poll of the last *closed* bar. The only differences are the price source and the sink (in-memory report vs. SQLite + printed monitor).
 
