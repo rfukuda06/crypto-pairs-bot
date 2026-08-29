@@ -67,6 +67,37 @@ def test_backfill_lets_runner_trade_on_first_bars(tmp_path):
     assert len(runner._closes) >= 100      # window already deep enough to compute z
 
 
+def test_duplicate_bar_is_skipped(tmp_path):
+    idx = pd.date_range("2024-01-01", periods=3, freq="1h", tz="UTC")
+
+    class StuckFeed:
+        """Always returns the SAME (first) bar."""
+        def latest_closed_bar(self, symbols):
+            return {"A": {"ts": idx[0], "open": 100.0, "close": 100.0},
+                    "B": {"ts": idx[0], "open": 50.0, "close": 50.0}}
+
+    class CountingStrategy:
+        """Records how many times a bar is actually processed."""
+        def __init__(self):
+            self.calls = 0
+        def on_bar(self, ctx):
+            self.calls += 1
+            return []
+
+    store = Store(str(tmp_path / "live.db"))
+    sel = PairSelection(a="A", b="B", beta=1.0, pvalue=0.001)
+    cfg = dict(z_window=5, entry_z=2.0, exit_z=0.5, stop_z=3.5, max_holding_bars=168)
+    strat = CountingStrategy()
+    runner = LiveRunner(feed=StuckFeed(), broker=PaperBroker(10000, 0.001, 0.0005),
+                        strategy=strat,
+                        risk=RiskManager(gross_exposure_pct=0.5, max_drawdown_pct=0.2),
+                        store=store, selection=sel, symbols=["A", "B"],
+                        strategy_cfg=cfg, sleep=lambda s: None)
+    runner.run(max_iterations=5)
+    assert strat.calls == 1                          # duplicate bars skipped, not re-processed
+    assert len(runner._closes) == 1                  # only the first bar recorded
+
+
 def test_live_runner_recovers_positions_on_restart(tmp_path):
     db = str(tmp_path / "live.db")
     store = Store(db)

@@ -44,6 +44,8 @@ class LiveRunner:
         a, b = self.sel.a, self.sel.b
         bar = self.feed.latest_closed_bar(self.symbols)
         ts = bar[a]["ts"]
+        if ts in self._closes.index:
+            return                       # no new bar closed since last poll
 
         # 1. fill orders decided last bar at this bar's open
         for o in self._pending:
