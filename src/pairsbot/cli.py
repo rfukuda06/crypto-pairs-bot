@@ -8,6 +8,7 @@ from pairsbot.data.historical import HistoricalLoader, align_closes
 from pairsbot.research.screen import screen
 from pairsbot.research.split import split_closes
 from pairsbot.research.optimize import optimize_params
+from pairsbot.research.selection_store import load_selection, save_selection
 from pairsbot.strategy.pairs import PairsStrategy
 from pairsbot.risk.manager import RiskManager
 from pairsbot.backtest.engine import Backtester
@@ -22,6 +23,22 @@ def _strategy_cfg(cfg) -> dict:
                 stop_z=s.stop_z, max_holding_bars=s.max_holding_bars)
 
 
+def _frozen_selection(cfg, loader, force: bool = False):
+    """Return the frozen pair, screening the IN-SAMPLE window once and persisting
+    it. Both backtest and live call this so they trade the identical pair."""
+    path = cfg.research.selection_path
+    if not force:
+        sel = load_selection(path)
+        if sel is not None:
+            return sel
+    closes = align_closes(loader.load(cfg.universe, cfg.data.start))
+    in_sample, _ = split_closes(closes, cfg.research.train_window_days, cfg.timeframe)
+    sel = screen(in_sample, cfg.research.p_threshold)
+    if sel is not None:
+        save_selection(path, sel)
+    return sel
+
+
 @app.command("fetch-data")
 def fetch_data(config: str = "config.yaml"):
     """Download and cache historical OHLCV for the universe."""
@@ -33,17 +50,15 @@ def fetch_data(config: str = "config.yaml"):
 
 @app.command("screen")
 def screen_cmd(config: str = "config.yaml"):
-    """Run the cointegration screen (on the in-sample window) and print the pair."""
+    """Screen the in-sample window, FREEZE the pair to disk, and print it."""
     cfg = load_config(config)
     loader = HistoricalLoader(cfg.data.cache_dir, cfg.quote, cfg.timeframe, exchange_name=cfg.exchange)
-    closes = align_closes(loader.load(cfg.universe, cfg.data.start))
-    in_sample, _ = split_closes(closes, cfg.research.train_window_days, cfg.timeframe)
-    sel = screen(in_sample, cfg.research.p_threshold)
+    sel = _frozen_selection(cfg, loader, force=True)
     if sel is None:
         typer.echo("No cointegrated pair below threshold.")
         raise typer.Exit(code=0)
     typer.echo(f"Selected {sel.a}/{sel.b}  beta={sel.beta:.4f}  p={sel.pvalue:.4g}  "
-               f"(in-sample: {len(in_sample)} bars)")
+               f"(frozen to {cfg.research.selection_path})")
 
 
 @app.command("backtest")
@@ -54,7 +69,7 @@ def backtest_cmd(config: str = "config.yaml", out: str = "reports"):
     data = loader.load(cfg.universe, cfg.data.start)
     closes = align_closes(data)
     in_sample, out_sample = split_closes(closes, cfg.research.train_window_days, cfg.timeframe)
-    sel = screen(in_sample, cfg.research.p_threshold)   # pair/beta chosen in-sample only
+    sel = _frozen_selection(cfg, loader)                # frozen, in-sample pick
     if sel is None:
         typer.echo("No cointegrated pair in-sample; nothing to backtest.")
         raise typer.Exit(code=0)
@@ -87,7 +102,7 @@ def optimize_cmd(config: str = "config.yaml", out: str = "reports"):
     data = loader.load(cfg.universe, cfg.data.start)
     closes = align_closes(data)
     in_sample, out_sample = split_closes(closes, cfg.research.train_window_days, cfg.timeframe)
-    sel = screen(in_sample, cfg.research.p_threshold)
+    sel = _frozen_selection(cfg, loader)
     if sel is None:
         typer.echo("No cointegrated pair in-sample; nothing to optimize.")
         raise typer.Exit(code=0)
@@ -144,8 +159,7 @@ def live_cmd(config: str = "config.yaml"):
 
     cfg = load_config(config)
     loader = HistoricalLoader(cfg.data.cache_dir, cfg.quote, cfg.timeframe, exchange_name=cfg.exchange)
-    sel = screen(align_closes(loader.load(cfg.universe, cfg.data.start)),
-                 cfg.research.p_threshold)
+    sel = _frozen_selection(cfg, loader)
     if sel is None:
         typer.echo("No cointegrated pair; not starting live loop.")
         raise typer.Exit(code=0)
