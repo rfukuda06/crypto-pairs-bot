@@ -1,6 +1,7 @@
 # tests/test_live_runner.py
 import pandas as pd
-from pairsbot.core.types import PairSelection
+import pytest
+from pairsbot.core.types import PairSelection, SpreadSide
 from pairsbot.strategy.pairs import PairsStrategy
 from pairsbot.risk.manager import RiskManager
 from pairsbot.execution.broker import PaperBroker
@@ -108,3 +109,45 @@ def test_live_runner_recovers_positions_on_restart(tmp_path):
     LiveRunner.restore_broker(broker, store, run_id)
     pos = broker.positions()
     assert pos["A"].qty == 2.0 and pos["B"].qty == -2.0
+
+
+def test_restart_keeps_equity_continuous(tmp_path):
+    store = Store(str(tmp_path / "live.db"))
+    run_id = store.start_run(mode="live", pair="A/B")
+    store.upsert_position(run_id, "A", qty=2.0, avg_price=250.0)
+    store.upsert_position(run_id, "B", qty=-4.0, avg_price=125.0)
+    store.record_equity(run_id, "t0", 9500.0)          # prior equity reflects fees/PnL
+    broker = PaperBroker(10000, 0.001, 0.0005)
+    LiveRunner.restore_broker(broker, store, run_id)
+    # equity right after restore (marked at cost basis) must match the last recorded
+    # equity — not jump back toward the starting balance.
+    assert broker.equity() == pytest.approx(9500.0)
+
+
+def test_restart_restores_position_and_in_position_flag(tmp_path):
+    db = str(tmp_path / "live.db")
+    store = Store(db)
+    sel = PairSelection(a="A", b="B", beta=1.0, pvalue=0.001)
+    # simulate a prior live run that entered a LONG-spread position (long A, short B)
+    run_id = store.start_run(mode="live", pair="A/B")
+    store.upsert_position(run_id, "A", qty=2.0, avg_price=250.0)
+    store.upsert_position(run_id, "B", qty=-4.0, avg_price=125.0)
+    store.record_equity(run_id, "2024-01-01T00:00:00", 10000.0)
+    store.record_trade(run_id, "2024-01-01T00:00:00", "A", 500.0, 250.0, 2.0, 0.5, "z -2.1")
+
+    # restart: restore broker, then build a resuming runner
+    broker = PaperBroker(10000, 0.001, 0.0005)
+    LiveRunner.restore_broker(broker, store, run_id)
+    seed = pd.DataFrame({"A": [250.0] * 10, "B": [125.0] * 10},
+                        index=pd.date_range("2024-01-01", periods=10, freq="1h", tz="UTC"))
+    cfg = dict(z_window=5, entry_z=2.0, exit_z=0.5, stop_z=3.5, max_holding_bars=168)
+    runner = LiveRunner(feed=object(), broker=broker, strategy=PairsStrategy(),
+                        risk=RiskManager(gross_exposure_pct=0.5, max_drawdown_pct=0.2),
+                        store=store, selection=sel, symbols=["A", "B"],
+                        strategy_cfg=cfg, sleep=lambda s: None,
+                        initial_closes=seed, run_id=run_id)
+
+    assert runner.run_id == run_id                     # resumed, not a new run
+    assert runner.in_position is True
+    assert runner.side == SpreadSide.LONG              # qty A > 0 => long spread
+    assert broker.positions()["A"].qty == 2.0

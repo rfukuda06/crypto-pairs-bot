@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from pairsbot.core.types import Position, StrategyContext
+from pairsbot.core.types import Position, SpreadSide, StrategyContext
 from pairsbot.monitor import build_live_snapshot, format_live_line
 
 
@@ -33,12 +33,40 @@ class LiveRunner:
         self.in_position = False
         self.side = None
         self.bars_in = 0
+        if run_id is not None:
+            self._restore_state()
 
     @staticmethod
     def restore_broker(broker, store, run_id: int) -> None:
-        """Rehydrate broker positions from the DB so a restart resumes cleanly."""
-        for sym, (qty, avg) in store.load_positions(run_id).items():
+        """Rehydrate broker positions AND cash from the DB so a restart resumes
+        cleanly with a continuous equity curve. Cash is reconstructed so that
+        equity marked at cost basis equals the last recorded equity; the first
+        live mark then moves it by the genuine unrealised PnL since entry."""
+        positions = store.load_positions(run_id)
+        for sym, (qty, avg) in positions.items():
             broker._pos[sym] = Position(sym, qty=qty, avg_price=avg)
+        eq = store.load_equity(run_id)
+        if eq:
+            last_equity = eq[-1][1]
+            pos_value = sum(qty * avg for qty, avg in positions.values())
+            broker.cash = last_equity - pos_value
+
+    def _restore_state(self) -> None:
+        """Rehydrate in_position/side/bars_in from the restored broker + DB so a
+        restart mid-position keeps managing that position instead of thinking it
+        is flat. bars_in is approximated as equity bars recorded after the last
+        trade (the open entry)."""
+        a = self.sel.a
+        held = self.broker.positions()
+        if a not in held or held[a].qty == 0:
+            return
+        self.in_position = True
+        self.side = SpreadSide.LONG if held[a].qty > 0 else SpreadSide.SHORT
+        trades = self.store.load_trades(self.run_id)
+        if trades:
+            entry_ts = trades[-1]["ts"]              # while in_position, last trade is the entry
+            eq = self.store.load_equity(self.run_id)
+            self.bars_in = sum(1 for ts, _ in eq if ts > entry_ts)
 
     def _step(self) -> None:
         a, b = self.sel.a, self.sel.b
