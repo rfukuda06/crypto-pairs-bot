@@ -47,9 +47,10 @@ RED     = "#f85149"
 GREEN   = "#3fb950"
 ORANGE  = "#f0883e"
 
-FRAMES     = 110      # time-lapse frames (all ~10k bars compressed into these)
-FRAME_MS   = 65       # ms per frame while sweeping
-HOLD_MS    = 1600     # hold the final frame before the loop restarts
+FRAMES     = 130      # time-lapse frames (all ~10k bars compressed into these)
+FRAME_MS   = 95       # ms per frame while sweeping (higher = slower, calmer)
+KILL_PAUSE_MS = 900   # linger on the moment the kill-switch benches the bot
+HOLD_MS    = 1700     # hold the final frame before the loop restarts
 GIF_COLORS = 32       # palette size per frame (keeps the file small)
 
 LEGEND_HANDLES = None  # built once in main(); reused every frame
@@ -149,6 +150,8 @@ def main():
     running_max = np.maximum.accumulate(eq)
     dd_series = eq / running_max - 1.0
     max_dd = float(dd_series.min())
+    peak_bar = int(np.argmax(eq))
+    peak_val = float(eq[peak_bar])
     fills = sum(1 for t in trades)
     print(f"run: {pair}  final ${final_eq:,.2f}  maxDD {max_dd:.2%}  fills {fills}  bars {n}")
 
@@ -166,7 +169,7 @@ def main():
     # on the lively part, then fast-forward the flat tail to the kill-switch beat.
     last_trade_bar = max((b for b, _ in events), default=n // 4)
     active_end = min(n, last_trade_bar + int(0.03 * n))
-    n_active = int(FRAMES * 0.72)
+    n_active = int(FRAMES * 0.75)
     cuts = np.unique(np.clip(np.concatenate([
         np.linspace(2, active_end, n_active, endpoint=False),
         np.linspace(active_end, n, FRAMES - n_active),
@@ -189,6 +192,7 @@ def main():
     dd_txt = fig.text(0.30, 0.905, "", fontsize=9)
 
     frames, durs = [], []
+    kill_paused = False
 
     for c in cuts:
         ax_z.clear(); ax_e.clear()
@@ -235,6 +239,14 @@ def main():
                       textcoords="offset points", xytext=(-7, 8), ha="right",
                       fontsize=8, color=FG)
 
+        # --- peak marker: makes the drawdown a visible drop, not just a number --
+        if (c - 1) >= peak_bar:
+            ax_e.scatter([peak_bar], [peak_val], s=22, facecolors="none",
+                         edgecolors=GREEN, linewidths=1.1, zorder=6)
+            ax_e.annotate(f"peak ${peak_val:,.0f}", (peak_bar, peak_val),
+                          textcoords="offset points", xytext=(5, 5), ha="left",
+                          fontsize=7.5, color=MUTED)
+
         # --- kill-switch beat: mark where the drawdown limit blocked entries ---
         if (c - 1) >= last_trade_bar:
             for ax in (ax_z, ax_e):
@@ -256,7 +268,11 @@ def main():
         buf = np.asarray(fig.canvas.buffer_rgba())[..., :3]
         frames.append(Image.fromarray(buf).convert(
             "P", palette=Image.ADAPTIVE, colors=GIF_COLORS))
-        durs.append(FRAME_MS)
+        if (c - 1) >= last_trade_bar and not kill_paused:
+            durs.append(KILL_PAUSE_MS)          # beat on the kill-switch reveal
+            kill_paused = True
+        else:
+            durs.append(FRAME_MS)
 
     durs[-1] = HOLD_MS
     plt.close(fig)
