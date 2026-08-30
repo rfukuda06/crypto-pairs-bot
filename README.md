@@ -1,7 +1,5 @@
 # Crypto Pairs-Trading Bot
 
-[![CI](https://github.com/rfukuda06/crypto-pairs-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/rfukuda06/crypto-pairs-bot/actions/workflows/ci.yml)
-
 **A statistical-arbitrage bot engineered to show its own strategy losing — honestly.** The same Strategy + Risk + PaperBroker core drives both the no-lookahead backtest and the live paper feed, so the numbers you see out-of-sample are the numbers live would trade.
 
 ```
