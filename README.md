@@ -17,7 +17,12 @@ Python 3.13 · Typer CLI (`pairsbot`) · paper-only by design. This is a portfol
 
 ![Animated replay of the out-of-sample backtest — z-score, trades, and equity](docs/img/replay.gif)
 
-*The real out-of-sample backtest, played back hour by hour — nothing staged. The z-score line crosses the ±2 bands and trades fire (**▲** short, **▼** long, **○** close) while equity bleeds from $10,000 to **$8,223.62**. Near −20% drawdown the risk kill-switch blocks new entries, so the bot sits out the rest of the sample flat. Regenerate with `PYTHONPATH=src python scripts/make_replay_gif.py`.*
+*A real out-of-sample backtest, played back hour by hour — nothing staged.*
+
+- **Top panel — the signal.** The z-score of the LTC/XLM spread: how far the two coins have drifted from their usual relationship (0 = normal). When it stretches past the ±2 bands, the bot bets they'll converge and opens a trade — **▲** short, **▼** long, **○** close.
+- **Bottom panel — the money.** Equity from a $10,000 start (red = underwater). It climbs to a $10,394 peak, then bleeds to **$8,223.62**; at −20% drawdown the risk kill-switch blocks new entries, so the bot sits out the rest of the sample flat.
+
+Regenerate with `PYTHONPATH=src python scripts/make_replay_gif.py`.
 
 ---
 
