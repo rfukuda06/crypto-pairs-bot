@@ -1,6 +1,5 @@
 # Crypto Pairs-Trading Bot
 
-*A market-neutral statistical-arbitrage bot whose no-lookahead backtest and live paper feed run on one shared core.*
 
 This is a Python implementation of a pairs-trading strategy on crypto: it trades one cointegrated pair market-neutral, long one coin and short the other, betting that the spread between their prices reverts to its mean. The same `Strategy` + `RiskManager` + `PaperBroker` core drives both the backtest and the live paper feed, so the out-of-sample numbers below are the numbers a live run would trade. Pair selection and every parameter tune happen strictly in-sample, which makes the out-of-sample result a genuine forward estimate rather than a fit to the data. The strategy is not profitable out-of-sample. The point of the project is the pipeline, and every property it relies on is enforced by the test suite.
 
@@ -13,7 +12,7 @@ This is a Python implementation of a pairs-trading strategy on crypto: it trades
      └──────── same PaperBroker (fees + slippage) ────────┘
 ```
 
-Python 3.11+, a Typer CLI (`pairsbot`), paper-only by design. Real-money execution is a deliberately disabled stub.
+Python 3.11+, a Typer CLI (`pairsbot`), paper-only.
 
 ## Watch it run
 
