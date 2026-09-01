@@ -2,7 +2,7 @@
 
 *A market-neutral statistical-arbitrage bot whose no-lookahead backtest and live paper feed run on one shared core.*
 
-This is a Python implementation of a pairs-trading strategy on crypto: it trades one cointegrated pair market-neutral, long one coin and short the other, betting that the spread between their prices reverts to its mean. The same `Strategy` + `RiskManager` + `PaperBroker` core drives both the backtest and the live paper feed, so the out-of-sample numbers below are the numbers a live run would trade. Pair selection and every parameter tune happen strictly in-sample, which makes the out-of-sample result a genuine forward estimate rather than a fit to the data. The strategy is not profitable out-of-sample; the point of the project is the pipeline, and every property it relies on is enforced by the test suite.
+This is a Python implementation of a pairs-trading strategy on crypto: it trades one cointegrated pair market-neutral, long one coin and short the other, betting that the spread between their prices reverts to its mean. The same `Strategy` + `RiskManager` + `PaperBroker` core drives both the backtest and the live paper feed, so the out-of-sample numbers below are the numbers a live run would trade. Pair selection and every parameter tune happen strictly in-sample, which makes the out-of-sample result a genuine forward estimate rather than a fit to the data. The strategy is not profitable out-of-sample. The point of the project is the pipeline, and every property it relies on is enforced by the test suite.
 
 ```
       Strategy + Risk (shared core)  ──  spread → z-score → signals
@@ -30,7 +30,7 @@ Regenerate with `PYTHONPATH=src python scripts/make_replay_gif.py`.
 
 The headline result is a loss. Because pair selection and every parameter tune happen strictly in-sample, the figures below are a true out-of-sample holdout the strategy never saw.
 
-On real Bitstamp hourly data (11 majors, from 2024-01-01), the screen freezes **LTC/XLM** (β = 0.2980, Engle-Granger cointegration p = 0.02166). The in-sample window is 12,960 bars; out-of-sample is 10,269 bars.
+On real Bitstamp hourly data (11 majors, from 2024-01-01), the screen freezes **LTC/XLM** (β = 0.2980, Engle-Granger cointegration p = 0.02166). The in-sample window is 12,960 bars, and out-of-sample is 10,269 bars.
 
 | params          | in-sample                   | out-of-sample                           |
 |-----------------|-----------------------------|-----------------------------------------|
@@ -59,7 +59,7 @@ Costs and limits: `gross_exposure_pct = 0.50`, `max_drawdown_pct = 0.20` (kill-s
 
 **The shared core.** One `PairsStrategy`, one `RiskManager`, and one `PaperBroker` drive both paths identically. The contract is `StrategyContext → list[Signal] → Orders → Fills`. The backtest feeds a historical DataFrame; live feeds an hourly `ccxt` poll of the last closed bar. The only differences are the price source and the sink (an in-memory report versus SQLite plus a printed monitor).
 
-The layering is the point: the strategy decides which side, the risk manager decides how much (in USD notional) and enforces the drawdown gate, the broker decides at what price and with what costs, and the engine decides when (fills land at the next bar's open). Real-money execution (`LiveBroker`) is a deliberately disabled stub that raises `NotImplementedError`; v1 is paper-only.
+The layering is the point: the strategy decides which side, the risk manager decides how much (in USD notional) and enforces the drawdown gate, the broker decides at what price and with what costs, and the engine decides when (fills land at the next bar's open). Real-money execution (`LiveBroker`) is a deliberately disabled stub that raises `NotImplementedError`, so v1 is paper-only.
 
 ## Correctness
 
@@ -154,8 +154,8 @@ All knobs live in `config.yaml`: universe, exchange, quote, timeframe, `research
 
 ## Limitations
 
-- **Paper-only.** `LiveBroker`, the real-execution seam, raises `NotImplementedError` and is never instantiated; ccxt is used read-only for market data. There are no API keys and no order placement.
-- **The kill-switch is entry-blocking only.** Once drawdown reaches `max_drawdown_pct` it stops new entries, but it does not force-liquidate an open position; that position closes only on a normal strategy exit.
-- **One pair, one timeframe, one exchange, one period.** The result is a single cointegrated pair on hourly Bitstamp data over one window. It demonstrates the pipeline; it is not a general claim about pairs trading.
+- **Paper-only.** `LiveBroker`, the real-execution seam, raises `NotImplementedError` and is never instantiated, and ccxt is used read-only for market data. There are no API keys and no order placement.
+- **The kill-switch is entry-blocking only.** Once drawdown reaches `max_drawdown_pct` it stops new entries, but it does not force-liquidate an open position, which closes only on a normal strategy exit.
+- **One pair, one timeframe, one exchange, one period.** The result is a single cointegrated pair on hourly Bitstamp data over one window. It demonstrates the pipeline, not a general claim about pairs trading.
 - **Multiple-testing is reported, not corrected for in selection.** The screen still picks the lowest raw p-value; the Šidák-adjusted figure is printed alongside it, but it does not change which pair is chosen.
 - **Simple fill model.** Fills land at the next bar's open with a fixed fee and a fixed adverse-slippage haircut. There is no order-book depth, no partial fills, no latency, and no funding.
