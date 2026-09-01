@@ -178,7 +178,7 @@ def format_status_block(snap: Snapshot) -> str:
         lines.append(f"── status · run #{rid} ({mode}, {pair}) "
                      f"· no equity recorded yet ──")
 
-    lines.append("Positions (cost basis @ entry — not marked)")
+    lines.append("Positions (cost basis @ entry, not marked)")
     if snap.legs:
         for leg in snap.legs:
             lines.append(f"  {leg.symbol:<9} {leg.qty:+.4f} @ {leg.avg_price:,.0f}"
