@@ -5,7 +5,7 @@ import typer
 
 from pairsbot.config import load_config
 from pairsbot.data.historical import HistoricalLoader, align_closes
-from pairsbot.research.screen import screen
+from pairsbot.research.screen import screen, num_candidate_pairs, sidak_pvalue
 from pairsbot.research.split import split_closes
 from pairsbot.research.optimize import optimize_params
 from pairsbot.research.selection_store import load_selection, save_selection
@@ -57,8 +57,15 @@ def screen_cmd(config: str = "config.yaml"):
     if sel is None:
         typer.echo("No cointegrated pair below threshold.")
         raise typer.Exit(code=0)
+    # Be as honest about the pair search as `optimize` is about the param grid:
+    # the winning p-value is the MINIMUM over every pair, so disclose the search
+    # size and the multiple-testing-corrected p alongside it.
+    in_sample, _ = split_closes(align_closes(loader.load(cfg.universe, cfg.data.start)),
+                                cfg.research.train_window_days, cfg.timeframe)
+    n_pairs = num_candidate_pairs(in_sample)
     typer.echo(f"Selected {sel.a}/{sel.b}  beta={sel.beta:.4f}  p={sel.pvalue:.4g}  "
-               f"(frozen to {cfg.research.selection_path})")
+               f"(min over {n_pairs} pairs; Šidák-adjusted p≈{sidak_pvalue(sel.pvalue, n_pairs):.2f}, "
+               f"not significant after correction)  (frozen to {cfg.research.selection_path})")
 
 
 @app.command("backtest")

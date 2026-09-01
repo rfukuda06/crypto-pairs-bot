@@ -39,3 +39,14 @@ def test_kill_switch_blocks_entry_after_drawdown():
     assert rm.allow_entry(7900) is False   # 21% dd, blocked
     rm.update_peak(12000)                  # new peak resets reference
     assert rm.allow_entry(11000) is True
+
+
+def test_kill_switch_blocks_at_exactly_the_kill_equity():
+    # The README claims the switch blocks at >= max_drawdown_pct, and the status
+    # line advertises a $8,000 kill equity for a $10,000 peak at 20%. So entries
+    # must be blocked at EXACTLY $8,000 (a 20% drawdown), not only strictly beyond.
+    rm = RiskManager(gross_exposure_pct=0.5, max_drawdown_pct=0.2)
+    rm.update_peak(10000)
+    assert rm.allow_entry(8000.0) is False    # exactly the kill equity: blocked
+    assert rm.allow_entry(8000.01) is True     # a hair above: still trading
+    assert rm.allow_entry(7999.99) is False    # below: blocked

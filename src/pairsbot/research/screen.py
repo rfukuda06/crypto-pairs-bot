@@ -11,6 +11,18 @@ from statsmodels.tsa.stattools import coint
 from pairsbot.core.types import PairSelection
 
 
+def num_candidate_pairs(closes: pd.DataFrame) -> int:
+    """How many pairs the screen tests — C(n_symbols, 2). This is the search size
+    that makes the winning pair's minimum p-value a multiple-testing statistic."""
+    return len(list(itertools.combinations(closes.columns, 2)))
+
+
+def sidak_pvalue(p: float, n: int) -> float:
+    """Šidák correction for taking the MINIMUM p-value over n independent tests:
+    the probability that the best of n nulls beats p. n=1 is a no-op."""
+    return 1.0 - (1.0 - p) ** n
+
+
 def hedge_ratio(a: pd.Series, b: pd.Series) -> float:
     """OLS beta of log(a) on log(b): log(a) = alpha + beta*log(b) + eps."""
     la, lb = np.log(a.to_numpy()), np.log(b.to_numpy())

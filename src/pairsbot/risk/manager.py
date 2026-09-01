@@ -16,8 +16,10 @@ class RiskManager:
     def allow_entry(self, equity: float) -> bool:
         if self._peak <= 0:
             return True
-        drawdown = 1.0 - equity / self._peak
-        return drawdown < self.max_drawdown_pct
+        # Block once equity reaches the kill floor peak*(1 - max_drawdown_pct),
+        # i.e. drawdown >= max_drawdown_pct. Comparing equity directly avoids the
+        # float drift of 1 - equity/peak (which makes exactly-20% read as 19.999%).
+        return equity > self._peak * (1.0 - self.max_drawdown_pct)
 
     def entry_orders(self, signal: Signal, equity: float, a: str, b: str) -> list[Order]:
         leg = self.gross_exposure_pct * equity / 2.0

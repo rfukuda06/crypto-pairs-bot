@@ -1,7 +1,9 @@
 # tests/test_screen.py
 import numpy as np
 import pandas as pd
-from pairsbot.research.screen import screen, hedge_ratio
+import pytest
+from pairsbot.research.screen import (screen, hedge_ratio, num_candidate_pairs,
+                                      sidak_pvalue)
 
 
 def _cointegrated_pair(n=1000, seed=0):
@@ -28,6 +30,20 @@ def test_screen_selects_cointegrated_pair_below_threshold():
     assert sel is not None
     assert {sel.a, sel.b} == {"A", "B"}
     assert sel.pvalue < 0.05
+
+
+def test_num_candidate_pairs_counts_all_symbol_combinations():
+    idx = pd.date_range("2024-01-01", periods=5, freq="1h", tz="UTC")
+    cols = list("ABCDEFGHIJK")                       # 11 symbols, like the universe
+    closes = pd.DataFrame({c: range(5) for c in cols}, index=idx)
+    assert num_candidate_pairs(closes) == 55         # C(11, 2) tests were run
+
+
+def test_sidak_pvalue_corrects_for_search_size():
+    # p=0.02166 is the MINIMUM over 55 pairs; after multiple-testing correction
+    # it is no longer significant (~0.70), which is the honest disclosure.
+    assert sidak_pvalue(0.02166, 55) == pytest.approx(0.70, abs=0.02)
+    assert sidak_pvalue(0.01, 1) == pytest.approx(0.01)   # a single test is a no-op
 
 
 def test_screen_returns_none_when_nothing_cointegrated():
